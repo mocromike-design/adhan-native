@@ -17,13 +17,16 @@ class PrayerAlarmScheduler(private val context: Context) {
 
         val now = ZonedDateTime.now()
 
-        // 1. Schedule exact alarms for each prayer event (Fajr, Duluk, Ghasaq)
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
+        // 1. Schedule exact alarms for each prayer event start (Fajr -6°, Duluk Zenith, Ghasaq -6°)
         schedule.entries.forEachIndexed { index, entry ->
-            if (entry.time.isAfter(now)) {
+            if (entry.startTime.isAfter(now)) {
+                val timeRangeStr = "${entry.startTime.format(formatter)} - ${entry.endTime.format(formatter)}"
                 val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
                     action = PrayerAlarmReceiver.ACTION_TRIGGER_PRAYER
                     putExtra(PrayerAlarmReceiver.EXTRA_PRAYER_NAME, entry.event.title)
-                    putExtra(PrayerAlarmReceiver.EXTRA_ASTRONOMICAL_INFO, entry.event.astronomicalAnchor)
+                    putExtra(PrayerAlarmReceiver.EXTRA_ASTRONOMICAL_INFO, "$timeRangeStr (${entry.event.astronomicalAnchor})")
                 }
 
                 val pendingIntent = PendingIntent.getBroadcast(
@@ -33,7 +36,7 @@ class PrayerAlarmScheduler(private val context: Context) {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                val triggerMillis = entry.time.toInstant().toEpochMilli()
+                val triggerMillis = entry.startTime.toInstant().toEpochMilli()
                 
                 // setExactAndAllowWhileIdle ensures it fires even in Android Deep Doze mode
                 alarmManager.setExactAndAllowWhileIdle(

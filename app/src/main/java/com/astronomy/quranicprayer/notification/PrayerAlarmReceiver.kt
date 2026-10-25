@@ -57,14 +57,29 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     if (lat != 0.0 && lon != 0.0) {
                         val today = LocalDate.now()
                         val zone = ZoneId.systemDefault()
-                        val fajr = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -18.0, true, zone)
-                        val duluk = SolarCalculator.calculateSolarNoon(today, lat, lon, zone)
-                        val ghasaq = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -0.833, false, zone)
+
+                        // 1. Fajr: -6.0° morning to sunrise (-0.833°)
+                        val fajrStart = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -6.0, true, zone)
+                        val fajrEnd = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -0.833, true, zone)
+
+                        // 2. Duluk: Zenith (Solar Noon) to sunset (-0.833°)
+                        val dulukStart = SolarCalculator.calculateSolarNoon(today, lat, lon, zone)
+                        val dulukEnd = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -0.833, false, zone)
+
+                        // 3. Ghasaq: -6.0° evening to -12.0° evening
+                        val ghasaqStart = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -6.0, false, zone)
+                        val ghasaqEnd = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -12.0, false, zone)
 
                         val entries = mutableListOf<EventEntry>()
-                        fajr?.let { entries.add(EventEntry(PrayerEvent.FAJR, it)) }
-                        entries.add(EventEntry(PrayerEvent.DULUK, duluk))
-                        ghasaq?.let { entries.add(EventEntry(PrayerEvent.GHASAQ, it)) }
+                        if (fajrStart != null && fajrEnd != null) {
+                            entries.add(EventEntry(PrayerEvent.FAJR, fajrStart, fajrEnd))
+                        }
+                        if (dulukEnd != null) {
+                            entries.add(EventEntry(PrayerEvent.DULUK, dulukStart, dulukEnd))
+                        }
+                        if (ghasaqStart != null && ghasaqEnd != null) {
+                            entries.add(EventEntry(PrayerEvent.GHASAQ, ghasaqStart, ghasaqEnd))
+                        }
 
                         val schedule = DailySchedule(today, entries, "Auto Rescheduled", lat, lon)
                         PrayerAlarmScheduler(context).scheduleAlarms(schedule)
@@ -132,9 +147,9 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         )
 
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.app_icon)
-            .setContentTitle("Nidā': $title")
-            .setContentText("Solar Alignment: $content")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Salat Times: $title")
+            .setContentText(content)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVibrate(vibrationPattern)
             .setAutoCancel(true)

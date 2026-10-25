@@ -145,15 +145,19 @@ fun MainPrayerScreen(
 
 @Composable
 fun CountdownSection(nextEvent: EventEntry?, countdown: String) {
+    val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
+        val titleText = nextEvent?.let { "VOLGENDE: ${it.event.title.uppercase()} (${it.startTime.format(formatter)})" }
+            ?: "VOLGENDE OVERGANG"
+
         Text(
-            text = (nextEvent?.event?.title ?: "VOLGENDE OVERGANG").uppercase(),
+            text = titleText,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 3.sp,
+            letterSpacing = 2.sp,
             color = AccentSolar
         )
 
@@ -161,7 +165,7 @@ fun CountdownSection(nextEvent: EventEntry?, countdown: String) {
 
         Text(
             text = countdown,
-            fontSize = 58.sp,
+            fontSize = 56.sp,
             fontWeight = FontWeight.Light,
             fontFamily = FontFamily.Monospace,
             letterSpacing = (-1).sp,
@@ -222,15 +226,26 @@ fun LocationSection(
 @Composable
 fun ScheduleList(entries: List<EventEntry>, nextEvent: EventEntry?) {
     val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val now = java.time.ZonedDateTime.now()
 
     Column(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         entries.forEach { entry ->
-            val isNext = entry.event == nextEvent?.event
-            val borderColor = if (isNext) AccentSolar.copy(alpha = 0.6f) else Color.Transparent
-            val cardBackground = if (isNext) SurfaceHighlight else SurfaceDark
+            val isActiveNow = now.isAfter(entry.startTime) && now.isBefore(entry.endTime)
+            val isNextUpcoming = entry.event == nextEvent?.event && !isActiveNow
+
+            val borderColor = when {
+                isActiveNow -> AccentSolar
+                isNextUpcoming -> AccentSolar.copy(alpha = 0.5f)
+                else -> Color.Transparent
+            }
+            val cardBackground = when {
+                isActiveNow -> SurfaceHighlight
+                isNextUpcoming -> SurfaceHighlight.copy(alpha = 0.6f)
+                else -> SurfaceDark
+            }
 
             Row(
                 modifier = Modifier
@@ -238,39 +253,54 @@ fun ScheduleList(entries: List<EventEntry>, nextEvent: EventEntry?) {
                     .clip(RoundedCornerShape(16.dp))
                     .background(cardBackground)
                     .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = entry.event.title,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = entry.event.arabicTerm,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             color = TextSecondary
                         )
+                        if (isActiveNow) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                color = AccentSolar.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "ACTIEF",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentSolar,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = entry.event.astronomicalAnchor,
                         fontSize = 11.sp,
-                        color = if (isNext) AccentSolar else TextSecondary
+                        color = if (isActiveNow || isNextUpcoming) AccentSolar else TextSecondary
                     )
                 }
 
                 Text(
-                    text = entry.time.format(formatter),
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Normal,
+                    text = "${entry.startTime.format(formatter)} - ${entry.endTime.format(formatter)}",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
-                    color = if (isNext) AccentSolar else TextPrimary
+                    color = if (isActiveNow || isNextUpcoming) AccentSolar else TextPrimary
                 )
             }
         }

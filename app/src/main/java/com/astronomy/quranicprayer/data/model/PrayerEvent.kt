@@ -6,32 +6,29 @@ import java.time.ZonedDateTime
 enum class PrayerEvent(
     val title: String,
     val arabicTerm: String,
-    val astronomicalAnchor: String,
-    val targetSunAngle: Double
+    val astronomicalAnchor: String
 ) {
     FAJR(
         title = "Fajr",
         arabicTerm = "الفجر",
-        astronomicalAnchor = "Astronomical Dawn (-18.0°)",
-        targetSunAngle = -18.0
+        astronomicalAnchor = "Zon op -6.0° → Zonsopkomst"
     ),
     DULUK(
         title = "Duluk al-Shams",
         arabicTerm = "دلوك الشمس",
-        astronomicalAnchor = "Solar Zenith (Culmination)",
-        targetSunAngle = 0.0
+        astronomicalAnchor = "Zenith → Zonsondergang"
     ),
     GHASAQ(
         title = "Ghasaq al-Layl",
         arabicTerm = "غسق الليل",
-        astronomicalAnchor = "Sunset / Horizon (-0.833°)",
-        targetSunAngle = -0.833
+        astronomicalAnchor = "Zon op -6.0° → -12.0°"
     )
 }
 
 data class EventEntry(
     val event: PrayerEvent,
-    val time: ZonedDateTime
+    val startTime: ZonedDateTime,
+    val endTime: ZonedDateTime
 )
 
 data class DailySchedule(

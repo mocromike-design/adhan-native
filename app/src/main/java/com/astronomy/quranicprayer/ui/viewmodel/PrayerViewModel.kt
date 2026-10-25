@@ -142,14 +142,28 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         val today = LocalDate.now()
         val zoneId = ZoneId.systemDefault()
 
-        val fajr = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -18.0, true, zoneId)
-        val duluk = SolarCalculator.calculateSolarNoon(today, latitude, longitude, zoneId)
-        val ghasaq = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -0.833, false, zoneId)
+        // 1. Fajr: -6.0° morning to sunrise (-0.833°)
+        val fajrStart = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -6.0, true, zoneId)
+        val fajrEnd = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -0.833, true, zoneId)
+
+        // 2. Duluk: Zenith (Solar Noon) to sunset (-0.833°)
+        val dulukStart = SolarCalculator.calculateSolarNoon(today, latitude, longitude, zoneId)
+        val dulukEnd = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -0.833, false, zoneId)
+
+        // 3. Ghasaq: -6.0° evening to -12.0° evening
+        val ghasaqStart = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -6.0, false, zoneId)
+        val ghasaqEnd = SolarCalculator.calculateTimeAtAltitude(today, latitude, longitude, -12.0, false, zoneId)
 
         val entries = mutableListOf<EventEntry>()
-        fajr?.let { entries.add(EventEntry(PrayerEvent.FAJR, it)) }
-        entries.add(EventEntry(PrayerEvent.DULUK, duluk))
-        ghasaq?.let { entries.add(EventEntry(PrayerEvent.GHASAQ, it)) }
+        if (fajrStart != null && fajrEnd != null) {
+            entries.add(EventEntry(PrayerEvent.FAJR, fajrStart, fajrEnd))
+        }
+        if (dulukEnd != null) {
+            entries.add(EventEntry(PrayerEvent.DULUK, dulukStart, dulukEnd))
+        }
+        if (ghasaqStart != null && ghasaqEnd != null) {
+            entries.add(EventEntry(PrayerEvent.GHASAQ, ghasaqStart, ghasaqEnd))
+        }
 
         val schedule = DailySchedule(
             date = today,
@@ -185,25 +199,36 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         val schedule = _uiState.value.schedule ?: return
         val now = ZonedDateTime.now()
 
-        val next = schedule.entries.firstOrNull { it.time.isAfter(now) }
+        // Find the next upcoming transition start time
+        val next = schedule.entries.firstOrNull { it.startTime.isAfter(now) }
             ?: run {
                 val tomorrow = LocalDate.now().plusDays(1)
                 val zoneId = ZoneId.systemDefault()
-                val tomorrowFajr = SolarCalculator.calculateTimeAtAltitude(
+                val tomorrowFajrStart = SolarCalculator.calculateTimeAtAltitude(
                     tomorrow,
                     schedule.latitude,
                     schedule.longitude,
-                    -18.0,
+                    -6.0,
                     true,
                     zoneId
-                ) ?: schedule.entries.first().time.plusDays(1)
-                EventEntry(PrayerEvent.FAJR, tomorrowFajr)
+                ) ?: schedule.entries.first().startTime.plusDays(1)
+                val tomorrowFajrEnd = SolarCalculator.calculateTimeAtAltitude(
+                    tomorrow,
+                    schedule.latitude,
+                    schedule.longitude,
+                    -0.833,
+                    true,
+                    zoneId
+                ) ?: schedule.entries.first().endTime.plusDays(1)
+
+                EventEntry(PrayerEvent.FAJR, tomorrowFajrStart, tomorrowFajrEnd)
             }
 
-        val duration = Duration.between(now, next.time)
-        val hours = duration.toHours()
-        val minutes = duration.toMinutes() % 60
-        val seconds = duration.seconds % 60
+        val duration = Duration.between(now, next.startTime)
+        val totalSec = maxOf(0L, duration.seconds)
+        val hours = totalSec / 3600
+        val minutes = (totalSec % 3600) / 60
+        val seconds = totalSec % 60
 
         val formatted = "%02d:%02d:%02d".format(hours, minutes, seconds)
 
