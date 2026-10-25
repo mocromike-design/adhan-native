@@ -105,14 +105,20 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             notificationManager.createNotificationChannel(channel)
         }
 
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val isAdhanEnabled = prefs.getBoolean("adhan_enabled", true)
+
         // Check Phone Silent / Vibration State
         val ringerMode = audioManager.ringerMode
         if (ringerMode == AudioManager.RINGER_MODE_VIBRATE || ringerMode == AudioManager.RINGER_MODE_SILENT) {
-            // Phone is on Mute or Vibrate: Vibrate explicitly via Vibrator hardware
+            // Phone is on Mute or Vibrate: Always vibrate explicitly via Vibrator hardware
             vibrateDevice(context, vibrationPattern)
         } else {
-            // Phone is on Normal Mode: Play Adhan media audio explicitly to ensure it recites even if screen is locked
-            playAdhanMedia(context)
+            // Phone is on Normal Mode: Play Adhan media audio only if user enabled Adhan
+            if (isAdhanEnabled) {
+                playAdhanMedia(context)
+            }
+            vibrateDevice(context, vibrationPattern)
         }
 
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
@@ -125,16 +131,22 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.app_icon)
             .setContentTitle("Nidā': $title")
             .setContentText("Solar Alignment: $content")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVibrate(vibrationPattern)
-            .setSound(adhanUri)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .build()
+
+        if (isAdhanEnabled && ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+            notificationBuilder.setSound(adhanUri)
+        } else {
+            notificationBuilder.setSound(null)
+        }
+
+        val notification = notificationBuilder.build()
 
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }

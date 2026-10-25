@@ -24,7 +24,10 @@ class MainActivity : ComponentActivity() {
                 val uiState by viewModel.uiState.collectAsState()
                 MainPrayerScreen(
                     uiState = uiState,
-                    onRefresh = { viewModel.loadSchedule() }
+                    onRefresh = { viewModel.loadSchedule() },
+                    onToggleAdhan = { viewModel.toggleAdhan() },
+                    onToggleTestAdhan = { viewModel.togglePlayTestAdhan() },
+                    onSetLocation = { lat, lon, city -> viewModel.setCustomCoordinates(lat, lon, city) }
                 )
             }
         }

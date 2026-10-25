@@ -2,8 +2,10 @@ package com.astronomy.quranicprayer.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.media.MediaPlayer
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.astronomy.quranicprayer.R
 import com.astronomy.quranicprayer.data.location.LocationTracker
 import com.astronomy.quranicprayer.data.model.DailySchedule
 import com.astronomy.quranicprayer.data.model.EventEntry
@@ -28,12 +30,20 @@ data class PrayerUiState(
     val schedule: DailySchedule? = null,
     val nextEvent: EventEntry? = null,
     val countdownFormatted: String = "00:00:00",
-    val error: String? = null
+    val error: String? = null,
+    val isAdhanEnabled: Boolean = true,
+    val isTestPlaying: Boolean = false
 )
 
 class PrayerViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(PrayerUiState())
+    private val prefs = application.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+    private val _uiState = MutableStateFlow(
+        PrayerUiState(
+            isAdhanEnabled = prefs.getBoolean("adhan_enabled", true)
+        )
+    )
     val uiState: StateFlow<PrayerUiState> = _uiState.asStateFlow()
 
     private val locationTracker = LocationTracker(
@@ -41,6 +51,7 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         application
     )
     private val scheduler = PrayerAlarmScheduler(application)
+    private var testPlayer: MediaPlayer? = null
 
     init {
         startCountdownTicker()
@@ -52,22 +63,78 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
             val location = locationTracker.getCurrentLocation()
 
             if (location == null) {
-                // If location not obtained, fall back to Amsterdam or cached coordinates
-                val prefs = getApplication<Application>().getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                val lat = prefs.getFloat("last_lat", 52.3676f).toDouble()
-                val lon = prefs.getFloat("last_lon", 4.9041f).toDouble()
-                computeScheduleWithCoords(lat, lon, "Amsterdam / Default")
+                // If location not obtained, fall back to Hechtel-Eksel or cached coordinates
+                val lat = prefs.getFloat("last_lat", 51.1270f).toDouble()
+                val lon = prefs.getFloat("last_lon", 5.3740f).toDouble()
+                val city = prefs.getString("last_city", "Hechtel-Eksel") ?: "Hechtel-Eksel"
+                computeScheduleWithCoords(lat, lon, city)
                 return@launch
             }
 
-            val prefs = getApplication<Application>().getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val cityName = locationTracker.getCityName(location.latitude, location.longitude)
             prefs.edit()
                 .putFloat("last_lat", location.latitude.toFloat())
                 .putFloat("last_lon", location.longitude.toFloat())
+                .putString("last_city", cityName)
                 .apply()
 
-            val cityName = locationTracker.getCityName(location.latitude, location.longitude)
             computeScheduleWithCoords(location.latitude, location.longitude, cityName)
+        }
+    }
+
+    fun setCustomCoordinates(latitude: Double, longitude: Double, cityName: String) {
+        prefs.edit()
+            .putFloat("last_lat", latitude.toFloat())
+            .putFloat("last_lon", longitude.toFloat())
+            .putString("last_city", cityName)
+            .apply()
+        computeScheduleWithCoords(latitude, longitude, cityName)
+    }
+
+    fun toggleAdhan() {
+        val newState = !_uiState.value.isAdhanEnabled
+        prefs.edit().putBoolean("adhan_enabled", newState).apply()
+        if (!newState && _uiState.value.isTestPlaying) {
+            stopTestAdhan()
+        }
+        _uiState.update { it.copy(isAdhanEnabled = newState) }
+    }
+
+    fun togglePlayTestAdhan() {
+        if (_uiState.value.isTestPlaying) {
+            stopTestAdhan()
+        } else {
+            startTestAdhan()
+        }
+    }
+
+    private fun startTestAdhan() {
+        try {
+            stopTestAdhan()
+            testPlayer = MediaPlayer.create(getApplication(), R.raw.adhan).apply {
+                setOnCompletionListener {
+                    _uiState.update { state -> state.copy(isTestPlaying = false) }
+                    release()
+                    testPlayer = null
+                }
+                start()
+            }
+            _uiState.update { it.copy(isTestPlaying = true) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            _uiState.update { it.copy(isTestPlaying = false) }
+        }
+    }
+
+    private fun stopTestAdhan() {
+        try {
+            testPlayer?.stop()
+            testPlayer?.release()
+            testPlayer = null
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            _uiState.update { it.copy(isTestPlaying = false) }
         }
     }
 
@@ -146,5 +213,10 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
                 countdownFormatted = formatted
             )
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopTestAdhan()
     }
 }
