@@ -1,39 +1,45 @@
 package com.astronomy.quranicprayer.ui.screens
 
 import android.Manifest
-import android.content.Intent
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astronomy.quranicprayer.data.model.EventEntry
-import com.astronomy.quranicprayer.notification.PrayerAlarmScheduler
 import com.astronomy.quranicprayer.ui.theme.*
 import com.astronomy.quranicprayer.ui.viewmodel.PrayerUiState
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun MainPrayerScreen(
@@ -43,9 +49,6 @@ fun MainPrayerScreen(
     onToggleTestAdhan: () -> Unit,
     onSetLocation: (Double, Double, String) -> Unit
 ) {
-    val context = LocalContext.current
-    val scheduler = remember { PrayerAlarmScheduler(context) }
-    var hasExactAlarmPermission by remember { mutableStateOf(scheduler.canScheduleExactAlarms()) }
     var showLocationDialog by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -67,9 +70,9 @@ fun MainPrayerScreen(
 
     if (showLocationDialog) {
         LocationSelectorDialog(
-            currentCity = uiState.schedule?.locationName ?: "Amsterdam",
-            currentLat = uiState.schedule?.latitude ?: 52.3676,
-            currentLon = uiState.schedule?.longitude ?: 4.9041,
+            currentCity = uiState.schedule?.locationName ?: "Hechtel-Eksel",
+            currentLat = uiState.schedule?.latitude ?: 51.1270,
+            currentLon = uiState.schedule?.longitude ?: 5.3740,
             onDismiss = { showLocationDialog = false },
             onApply = { lat, lon, city ->
                 onSetLocation(lat, lon, city)
@@ -82,55 +85,82 @@ fun MainPrayerScreen(
         )
     }
 
+    val backgroundBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                BackgroundDark,
+                BackgroundMid,
+                BackgroundBottom
+            )
+        )
+    }
+
     Scaffold(
-        containerColor = BackgroundDark
+        containerColor = Color.Transparent
     ) { paddingValues ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
+                .background(backgroundBrush)
                 .padding(paddingValues)
         ) {
+            // Adaptive sizing for compact screens (e.g. Samsung S24) vs large screens (e.g. S26 Ultra)
+            val isCompactScreen = maxHeight < 760.dp
+            val verticalSpacing = if (isCompactScreen) 10.dp else 14.dp
+            val cardPaddingVertical = if (isCompactScreen) 12.dp else 16.dp
+            val countdownFontSize = if (isCompactScreen) 38.sp else 44.sp
+            val intervalFontSize = if (isCompactScreen) 21.sp else 24.sp
+
             if (uiState.isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
                     color = AccentSolar,
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.5.dp
                 )
             } else {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 18.dp, vertical = if (isCompactScreen) 8.dp else 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Spacer(modifier = Modifier.height(20.dp))
+                    // Top Group: Location Bar + Countdown Card
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        LocationHeader(
+                            locationName = uiState.schedule?.locationName ?: "Hechtel-Eksel",
+                            onClick = { showLocationDialog = true },
+                            onRefresh = onRefresh
+                        )
 
-                    // 1. Top Countdown Section
-                    CountdownSection(
-                        nextEvent = uiState.nextEvent,
-                        countdown = uiState.countdownFormatted
-                    )
+                        Spacer(modifier = Modifier.height(verticalSpacing))
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                        CountdownHeroCard(
+                            nextEvent = uiState.nextEvent,
+                            countdown = uiState.countdownFormatted,
+                            countdownFontSize = countdownFontSize,
+                            isCompact = isCompactScreen
+                        )
+                    }
 
-                    // 2. Middle: Location Pill (Clickable to change city / coords)
-                    LocationSection(
-                        locationName = uiState.schedule?.locationName ?: "Actieve Locatie",
-                        onClick = { showLocationDialog = true },
-                        onRefresh = onRefresh
-                    )
+                    Spacer(modifier = Modifier.height(verticalSpacing))
 
-                    Spacer(modifier = Modifier.height(28.dp))
-
-                    // 3. The 3 Astronomical Times
-                    ScheduleList(
+                    // Middle Group: The 3 Prayer Period Boxes
+                    ScheduleCardsSection(
                         entries = uiState.schedule?.entries ?: emptyList(),
-                        nextEvent = uiState.nextEvent
+                        nextEvent = uiState.nextEvent,
+                        cardSpacing = verticalSpacing,
+                        cardPaddingVertical = cardPaddingVertical,
+                        intervalFontSize = intervalFontSize
                     )
 
-                    Spacer(modifier = Modifier.height(28.dp))
+                    Spacer(modifier = Modifier.height(verticalSpacing))
 
-                    // 4. Quick Action Controls: Adhan ON/OFF & Test Adhan
+                    // Bottom Group: Adhan Controls
                     ActionControlsRow(
                         isAdhanEnabled = uiState.isAdhanEnabled,
                         isTestPlaying = uiState.isTestPlaying,
@@ -144,56 +174,35 @@ fun MainPrayerScreen(
 }
 
 @Composable
-fun CountdownSection(nextEvent: EventEntry?, countdown: String) {
-    val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        val titleText = nextEvent?.let { "VOLGENDE: ${it.event.title.uppercase()} (${it.startTime.format(formatter)})" }
-            ?: "VOLGENDE OVERGANG"
-
-        Text(
-            text = titleText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 2.sp,
-            color = AccentSolar
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = countdown,
-            fontSize = 56.sp,
-            fontWeight = FontWeight.Light,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = (-1).sp,
-            color = TextPrimary
-        )
-
-        Text(
-            text = nextEvent?.event?.astronomicalAnchor ?: "Berekenen astronomische stand",
-            fontSize = 12.sp,
-            color = TextSecondary
-        )
-    }
-}
-
-@Composable
-fun LocationSection(
+fun LocationHeader(
     locationName: String,
     onClick: () -> Unit,
     onRefresh: () -> Unit
 ) {
+    val pillBorderBrush = remember {
+        Brush.horizontalGradient(
+            colors = listOf(
+                AccentCyanGlow.copy(alpha = 0.6f),
+                AccentSolar.copy(alpha = 0.7f),
+                AccentCyanGlow.copy(alpha = 0.6f)
+            )
+        )
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier
-            .clip(RoundedCornerShape(32.dp))
-            .background(SurfaceDark)
+            .shadow(6.dp, RoundedCornerShape(50))
+            .clip(RoundedCornerShape(50))
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(SurfaceCardTop, SurfaceDark, SurfaceCardTop)
+                )
+            )
+            .border(1.dp, pillBorderBrush, RoundedCornerShape(50))
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 7.dp)
     ) {
         Icon(
             imageVector = Icons.Default.LocationOn,
@@ -205,103 +214,265 @@ fun LocationSection(
         Text(
             text = locationName,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextPrimary
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.width(8.dp))
-        IconButton(
-            onClick = onRefresh,
-            modifier = Modifier.size(20.dp)
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(AccentSubtle.copy(alpha = 0.6f))
+                .clickable { onRefresh() },
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Refresh,
                 contentDescription = "GPS Vernieuwen",
-                tint = TextSecondary,
-                modifier = Modifier.size(14.dp)
+                tint = TextCyan,
+                modifier = Modifier.size(13.dp)
             )
         }
     }
 }
 
 @Composable
-fun ScheduleList(entries: List<EventEntry>, nextEvent: EventEntry?) {
+fun CountdownHeroCard(
+    nextEvent: EventEntry?,
+    countdown: String,
+    countdownFontSize: androidx.compose.ui.unit.TextUnit,
+    isCompact: Boolean
+) {
     val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    val now = java.time.ZonedDateTime.now()
+
+    val heroBorderBrush = remember {
+        Brush.linearGradient(
+            colors = listOf(
+                AccentSolar.copy(alpha = 0.85f),
+                AccentCyanGlow.copy(alpha = 0.55f),
+                AccentSolar.copy(alpha = 0.85f)
+            )
+        )
+    }
+
+    val heroBgBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                SurfaceHighlight.copy(alpha = 0.9f),
+                SurfaceDark.copy(alpha = 0.95f)
+            )
+        )
+    }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(10.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(heroBgBrush)
+            .border(1.5.dp, heroBorderBrush, RoundedCornerShape(22.dp))
+            .padding(horizontal = 16.dp, vertical = if (isCompact) 10.dp else 14.dp)
+    ) {
+        val headerText = nextEvent?.let {
+            "VOLGENDE PERIODE: ${it.event.title.uppercase()} (${it.startTime.format(formatter)})"
+        } ?: "VOLGENDE PERIODE"
+
+        Text(
+            text = headerText,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.5.sp,
+            color = AccentGoldBright,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = countdown,
+            fontSize = countdownFontSize,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp,
+            color = TextPrimary,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
+
+        Text(
+            text = nextEvent?.event?.astronomicalAnchor ?: "Astronomische zonnestand berekenen...",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextCyan,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun ScheduleCardsSection(
+    entries: List<EventEntry>,
+    nextEvent: EventEntry?,
+    cardSpacing: Dp,
+    cardPaddingVertical: Dp,
+    intervalFontSize: androidx.compose.ui.unit.TextUnit
+) {
+    val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val now = ZonedDateTime.now()
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(cardSpacing),
         modifier = Modifier.fillMaxWidth()
     ) {
         entries.forEach { entry ->
             val isActiveNow = now.isAfter(entry.startTime) && now.isBefore(entry.endTime)
             val isNextUpcoming = entry.event == nextEvent?.event && !isActiveNow
 
-            val borderColor = when {
-                isActiveNow -> AccentSolar
-                isNextUpcoming -> AccentSolar.copy(alpha = 0.5f)
-                else -> Color.Transparent
-            }
-            val cardBackground = when {
-                isActiveNow -> SurfaceHighlight
-                isNextUpcoming -> SurfaceHighlight.copy(alpha = 0.6f)
-                else -> SurfaceDark
+            val cardBorderBrush = when {
+                isActiveNow -> Brush.linearGradient(
+                    colors = listOf(AccentSolar, AccentCyanGlow, AccentSolar)
+                )
+                isNextUpcoming -> Brush.linearGradient(
+                    colors = listOf(
+                        AccentSolar.copy(alpha = 0.75f),
+                        AccentCyan.copy(alpha = 0.6f),
+                        AccentSolar.copy(alpha = 0.75f)
+                    )
+                )
+                else -> Brush.linearGradient(
+                    colors = listOf(
+                        AccentCyan.copy(alpha = 0.45f),
+                        AccentSubtle.copy(alpha = 0.8f),
+                        AccentSolar.copy(alpha = 0.35f)
+                    )
+                )
             }
 
-            Row(
+            val cardBgBrush = when {
+                isActiveNow -> Brush.verticalGradient(
+                    colors = listOf(SurfaceHighlight, SurfaceHighlightBottom)
+                )
+                isNextUpcoming -> Brush.verticalGradient(
+                    colors = listOf(SurfaceCardTop, SurfaceCardBottom)
+                )
+                else -> Brush.verticalGradient(
+                    colors = listOf(SurfaceDark, SurfaceCardBottom)
+                )
+            }
+
+            val borderWidth = if (isActiveNow) 2.dp else 1.3.dp
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBackground)
-                    .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .shadow(if (isActiveNow) 12.dp else 6.dp, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(cardBgBrush)
+                    .border(borderWidth, cardBorderBrush, RoundedCornerShape(20.dp))
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                // Subtle top decorative highlight bar
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(0.45f)
+                        .height(2.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    if (isActiveNow || isNextUpcoming) AccentSolar else AccentCyanGlow.copy(alpha = 0.7f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = cardPaddingVertical),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 1. Boven in het midden: De naam van de tijd
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = entry.event.title,
                             fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                            color = if (isActiveNow || isNextUpcoming) AccentGoldBright else TextPrimary,
+                            textAlign = TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = entry.event.arabicTerm,
-                            fontSize = 13.sp,
-                            color = TextSecondary
-                        )
+
                         if (isActiveNow) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
-                                color = AccentSolar.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
+                                color = AccentSolar.copy(alpha = 0.22f),
+                                shape = RoundedCornerShape(50),
+                                border = androidx.compose.foundation.BorderStroke(0.8.dp, AccentSolar)
                             ) {
                                 Text(
                                     text = "ACTIEF",
                                     fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp,
                                     color = AccentSolar,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // 2. Daaronder in het midden: Het tijdsvak
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(BackgroundDark.copy(alpha = 0.45f))
+                            .border(
+                                0.8.dp,
+                                if (isActiveNow || isNextUpcoming) AccentSolar.copy(alpha = 0.35f)
+                                else AccentCyan.copy(alpha = 0.2f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .padding(horizontal = 18.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${entry.startTime.format(formatter)}  –  ${entry.endTime.format(formatter)}",
+                            fontSize = intervalFontSize,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isActiveNow) AccentSolar else TextPrimary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // 3. Daaronder in het midden: De zonstanden
                     Text(
                         text = entry.event.astronomicalAnchor,
-                        fontSize = 11.sp,
-                        color = if (isActiveNow || isNextUpcoming) AccentSolar else TextSecondary
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isActiveNow || isNextUpcoming) TextCyan else TextSecondary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                Text(
-                    text = "${entry.startTime.format(formatter)} - ${entry.endTime.format(formatter)}",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (isActiveNow || isNextUpcoming) AccentSolar else TextPrimary
-                )
             }
         }
     }
@@ -319,14 +490,23 @@ fun ActionControlsRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Toggle Adhan ON/OFF Button
+        val adhanBorder = if (isAdhanEnabled) {
+            Brush.horizontalGradient(listOf(AccentSolar, AccentCyanGlow))
+        } else {
+            Brush.horizontalGradient(listOf(AccentSubtle, AccentSubtle))
+        }
+
         Button(
             onClick = onToggleAdhan,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .height(46.dp)
+                .border(1.2.dp, adhanBorder, RoundedCornerShape(14.dp)),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isAdhanEnabled) SurfaceHighlight else SurfaceDark
             ),
             shape = RoundedCornerShape(14.dp),
-            border = if (isAdhanEnabled) ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(AccentSolar)) else null
+            contentPadding = PaddingValues(horizontal = 10.dp)
         ) {
             Icon(
                 imageVector = if (isAdhanEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
@@ -334,35 +514,48 @@ fun ActionControlsRow(
                 tint = if (isAdhanEnabled) AccentSolar else TextSecondary,
                 modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = if (isAdhanEnabled) "Adhan AAN" else "Adhan UIT",
                 fontSize = 12.sp,
-                color = if (isAdhanEnabled) TextPrimary else TextSecondary
+                fontWeight = FontWeight.SemiBold,
+                color = if (isAdhanEnabled) TextPrimary else TextSecondary,
+                maxLines = 1
             )
         }
 
         // Test Adhan Play/Stop Button
+        val testBorder = if (isTestPlaying) {
+            Brush.horizontalGradient(listOf(AccentSolar, AccentAmber))
+        } else {
+            Brush.horizontalGradient(listOf(AccentCyan.copy(alpha = 0.5f), AccentSubtle))
+        }
+
         Button(
             onClick = onToggleTestAdhan,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .height(46.dp)
+                .border(1.2.dp, testBorder, RoundedCornerShape(14.dp)),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isTestPlaying) SurfaceHighlight else SurfaceDark
             ),
             shape = RoundedCornerShape(14.dp),
-            border = if (isTestPlaying) ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(AccentSolar)) else null
+            contentPadding = PaddingValues(horizontal = 10.dp)
         ) {
             Icon(
                 imageVector = if (isTestPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
                 contentDescription = null,
-                tint = if (isTestPlaying) AccentSolar else TextSecondary,
+                tint = if (isTestPlaying) AccentSolar else TextCyan,
                 modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = if (isTestPlaying) "Stop Adhan" else "Test Adhan",
                 fontSize = 12.sp,
-                color = if (isTestPlaying) AccentSolar else TextPrimary
+                fontWeight = FontWeight.SemiBold,
+                color = if (isTestPlaying) AccentSolar else TextPrimary,
+                maxLines = 1
             )
         }
     }
@@ -378,76 +571,50 @@ fun LocationSelectorDialog(
     onApply: (Double, Double, String) -> Unit,
     onUseGps: () -> Unit
 ) {
-    var latText by remember { mutableStateOf(String.format(java.util.Locale.US, "%.4f", currentLat)) }
-    var lonText by remember { mutableStateOf(String.format(java.util.Locale.US, "%.4f", currentLon)) }
-
-    val presetCities = remember {
-        listOf(
-            Triple("Hechtel-Eksel", 51.1270, 5.3740),
-            Triple("Amsterdam", 52.3676, 4.9041),
-            Triple("Rotterdam", 51.9244, 4.4777),
-            Triple("Den Haag", 52.0705, 4.3007),
-            Triple("Utrecht", 52.0907, 5.1214),
-            Triple("Brussel", 50.8503, 4.3517),
-            Triple("Antwerpen", 51.2194, 4.4025),
-            Triple("Londen", 51.5074, -0.1278),
-            Triple("Parijs", 48.8566, 2.3522),
-            Triple("Berlijn", 52.5200, 13.4050),
-            Triple("Istanbul", 41.0082, 28.9784),
-            Triple("Mekka", 21.4225, 39.8262),
-            Triple("Medina", 24.5247, 39.5692),
-            Triple("Jeruzalem", 31.7683, 35.2137),
-            Triple("Caïro", 30.0444, 31.2357),
-            Triple("Dubai", 25.2048, 55.2708)
-        )
-    }
-
-    var selectedPreset by remember { mutableStateOf("") }
+    var latText by remember { mutableStateOf(String.format(Locale.US, "%.4f", currentLat)) }
+    var lonText by remember { mutableStateOf(String.format(Locale.US, "%.4f", currentLon)) }
+    var selectedPreset by remember { mutableStateOf(currentCity) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceDark,
+        shape = RoundedCornerShape(22.dp),
         title = {
             Text(
                 text = "Locatie Instellingen",
                 fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                fontWeight = FontWeight.Bold,
+                color = AccentGoldBright
             )
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = "Kies een stad of voer handmatig coördinaten in:",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-
-                // Preset selector chips
-                Row(
+                Button(
+                    onClick = onUseGps,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentSolar),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Button(
-                        onClick = onUseGps,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentSolar),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("📍 Gebruik Satelliet GPS", color = BackgroundDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text(
+                        text = "📍 Gebruik Satelliet GPS",
+                        color = BackgroundDark,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Text(
-                    text = "Of snelle stadskeuze:",
-                    fontSize = 11.sp,
-                    color = TextSecondary
+                    text = "Snelle stadskeuze:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextCyan
                 )
 
-                // Simple preset buttons row (most common)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
                         listOf(Triple("Hechtel-Eksel", 51.1270, 5.3740), Triple("Brussel", 50.8503, 4.3517)),
@@ -460,40 +627,65 @@ fun LocationSelectorDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             row.forEach { (city, lat, lon) ->
+                                val isSelected = selectedPreset == city
                                 OutlinedButton(
                                     onClick = {
-                                        latText = String.format(java.util.Locale.US, "%.4f", lat)
-                                        lonText = String.format(java.util.Locale.US, "%.4f", lon)
+                                        latText = String.format(Locale.US, "%.4f", lat)
+                                        lonText = String.format(Locale.US, "%.4f", lon)
                                         selectedPreset = city
                                     },
                                     modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) AccentSolar else AccentCyan.copy(alpha = 0.35f)
+                                    ),
                                     colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (selectedPreset == city) SurfaceHighlight else Color.Transparent
-                                    )
+                                        containerColor = if (isSelected) SurfaceHighlight else BackgroundDark.copy(alpha = 0.4f)
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
                                 ) {
-                                    Text(city, fontSize = 11.sp, color = TextPrimary)
+                                    Text(
+                                        text = city,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) AccentGoldBright else TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
                     }
                 }
 
-                // Manual Coords
+                Text(
+                    text = "Handmatige coördinaten:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextCyan
+                )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedTextField(
                         value = latText,
-                        onValueChange = { latText = it },
+                        onValueChange = {
+                            latText = it
+                            selectedPreset = ""
+                        },
                         label = { Text("Breedtegraad", fontSize = 10.sp) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = lonText,
-                        onValueChange = { lonText = it },
+                        onValueChange = {
+                            lonText = it
+                            selectedPreset = ""
+                        },
                         label = { Text("Lengtegraad", fontSize = 10.sp) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -506,10 +698,11 @@ fun LocationSelectorDialog(
                 onClick = {
                     val lat = latText.toDoubleOrNull() ?: currentLat
                     val lon = lonText.toDoubleOrNull() ?: currentLon
-                    val name = if (selectedPreset.isNotEmpty()) selectedPreset else String.format(java.util.Locale.US, "%.2f°, %.2f°", lat, lon)
+                    val name = if (selectedPreset.isNotEmpty()) selectedPreset else String.format(Locale.US, "%.2f°, %.2f°", lat, lon)
                     onApply(lat, lon, name)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentSolar)
+                colors = ButtonDefaults.buttonColors(containerColor = AccentSolar),
+                shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Toepassen", color = BackgroundDark, fontWeight = FontWeight.Bold)
             }

@@ -5,23 +5,19 @@ import java.time.ZonedDateTime
 
 enum class PrayerEvent(
     val title: String,
-    val arabicTerm: String,
     val astronomicalAnchor: String
 ) {
     FAJR(
         title = "Fajr",
-        arabicTerm = "الفجر",
-        astronomicalAnchor = "Zon op -6.0° → Zonsopkomst"
+        astronomicalAnchor = "Zon op -6.0° tot Zonsopkomst"
     ),
     DULUK(
         title = "Duluk al-Shams",
-        arabicTerm = "دلوك الشمس",
-        astronomicalAnchor = "Zenith → Zonsondergang"
+        astronomicalAnchor = "Zenith tot Zonsondergang"
     ),
     GHASAQ(
         title = "Ghasaq al-Layl",
-        arabicTerm = "غسق الليل",
-        astronomicalAnchor = "Zon op -6.0° → -12.0°"
+        astronomicalAnchor = "Zon op -6.0° tot -12.0°"
     )
 }
 
