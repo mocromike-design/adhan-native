@@ -8,23 +8,22 @@ enum class PrayerEvent(
     val astronomicalAnchor: String
 ) {
     FAJR(
-        title = "Fajr",
-        astronomicalAnchor = "Zon op -6.0° tot Zonsopkomst"
+        title = "Salaat al-Fajr",
+        astronomicalAnchor = "-6 graden oost"
     ),
-    DULUK(
-        title = "Duluk al-Shams",
-        astronomicalAnchor = "Zenith tot Zonsondergang"
+    WUSTA(
+        title = "Salaat al-Wusta",
+        astronomicalAnchor = "Zenith"
     ),
-    GHASAQ(
-        title = "Ghasaq al-Layl",
-        astronomicalAnchor = "Zon op -6.0° tot -12.0°"
+    ISHA(
+        title = "Salaat al-Isha",
+        astronomicalAnchor = "0 graden west"
     )
 }
 
 data class EventEntry(
     val event: PrayerEvent,
-    val startTime: ZonedDateTime,
-    val endTime: ZonedDateTime
+    val time: ZonedDateTime
 )
 
 data class DailySchedule(

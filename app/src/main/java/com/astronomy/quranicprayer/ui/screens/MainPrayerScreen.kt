@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.sp
 import com.astronomy.quranicprayer.data.model.EventEntry
 import com.astronomy.quranicprayer.ui.theme.*
 import com.astronomy.quranicprayer.ui.viewmodel.PrayerUiState
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -109,7 +108,7 @@ fun MainPrayerScreen(
             val verticalSpacing = if (isCompactScreen) 10.dp else 14.dp
             val cardPaddingVertical = if (isCompactScreen) 12.dp else 16.dp
             val countdownFontSize = if (isCompactScreen) 38.sp else 44.sp
-            val intervalFontSize = if (isCompactScreen) 21.sp else 24.sp
+            val timeFontSize = if (isCompactScreen) 24.sp else 28.sp
 
             if (uiState.isLoading) {
                 CircularProgressIndicator(
@@ -149,13 +148,13 @@ fun MainPrayerScreen(
 
                     Spacer(modifier = Modifier.height(verticalSpacing))
 
-                    // Middle Group: The 3 Prayer Period Boxes
+                    // Middle Group: The 3 Prayer Boxes
                     ScheduleCardsSection(
                         entries = uiState.schedule?.entries ?: emptyList(),
                         nextEvent = uiState.nextEvent,
                         cardSpacing = verticalSpacing,
                         cardPaddingVertical = cardPaddingVertical,
-                        intervalFontSize = intervalFontSize
+                        timeFontSize = timeFontSize
                     )
 
                     Spacer(modifier = Modifier.height(verticalSpacing))
@@ -277,8 +276,8 @@ fun CountdownHeroCard(
             .padding(horizontal = 16.dp, vertical = if (isCompact) 10.dp else 14.dp)
     ) {
         val headerText = nextEvent?.let {
-            "VOLGENDE PERIODE: ${it.event.title.uppercase()} (${it.startTime.format(formatter)})"
-        } ?: "VOLGENDE PERIODE"
+            "VOLGENDE: ${it.event.title.uppercase()} (${it.time.format(formatter)})"
+        } ?: "VOLGENDE GEBEDSTIJD"
 
         Text(
             text = headerText,
@@ -322,57 +321,47 @@ fun ScheduleCardsSection(
     nextEvent: EventEntry?,
     cardSpacing: Dp,
     cardPaddingVertical: Dp,
-    intervalFontSize: androidx.compose.ui.unit.TextUnit
+    timeFontSize: androidx.compose.ui.unit.TextUnit
 ) {
     val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    val now = ZonedDateTime.now()
 
     Column(
         verticalArrangement = Arrangement.spacedBy(cardSpacing),
         modifier = Modifier.fillMaxWidth()
     ) {
         entries.forEach { entry ->
-            val isActiveNow = now.isAfter(entry.startTime) && now.isBefore(entry.endTime)
-            val isNextUpcoming = entry.event == nextEvent?.event && !isActiveNow
+            val isNextUpcoming = entry.event == nextEvent?.event
 
-            val cardBorderBrush = when {
-                isActiveNow -> Brush.linearGradient(
+            val cardBorderBrush = if (isNextUpcoming) {
+                Brush.linearGradient(
                     colors = listOf(AccentSolar, AccentCyanGlow, AccentSolar)
                 )
-                isNextUpcoming -> Brush.linearGradient(
+            } else {
+                Brush.linearGradient(
                     colors = listOf(
-                        AccentSolar.copy(alpha = 0.75f),
-                        AccentCyan.copy(alpha = 0.6f),
-                        AccentSolar.copy(alpha = 0.75f)
-                    )
-                )
-                else -> Brush.linearGradient(
-                    colors = listOf(
-                        AccentCyan.copy(alpha = 0.45f),
-                        AccentSubtle.copy(alpha = 0.8f),
-                        AccentSolar.copy(alpha = 0.35f)
+                        AccentCyan.copy(alpha = 0.5f),
+                        AccentSubtle.copy(alpha = 0.85f),
+                        AccentSolar.copy(alpha = 0.4f)
                     )
                 )
             }
 
-            val cardBgBrush = when {
-                isActiveNow -> Brush.verticalGradient(
+            val cardBgBrush = if (isNextUpcoming) {
+                Brush.verticalGradient(
                     colors = listOf(SurfaceHighlight, SurfaceHighlightBottom)
                 )
-                isNextUpcoming -> Brush.verticalGradient(
+            } else {
+                Brush.verticalGradient(
                     colors = listOf(SurfaceCardTop, SurfaceCardBottom)
-                )
-                else -> Brush.verticalGradient(
-                    colors = listOf(SurfaceDark, SurfaceCardBottom)
                 )
             }
 
-            val borderWidth = if (isActiveNow) 2.dp else 1.3.dp
+            val borderWidth = if (isNextUpcoming) 1.8.dp else 1.3.dp
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(if (isActiveNow) 12.dp else 6.dp, RoundedCornerShape(20.dp))
+                    .shadow(if (isNextUpcoming) 12.dp else 6.dp, RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp))
                     .background(cardBgBrush)
                     .border(borderWidth, cardBorderBrush, RoundedCornerShape(20.dp))
@@ -387,7 +376,7 @@ fun ScheduleCardsSection(
                             Brush.horizontalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    if (isActiveNow || isNextUpcoming) AccentSolar else AccentCyanGlow.copy(alpha = 0.7f),
+                                    if (isNextUpcoming) AccentSolar else AccentCyanGlow.copy(alpha = 0.7f),
                                     Color.Transparent
                                 )
                             )
@@ -401,60 +390,39 @@ fun ScheduleCardsSection(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // 1. Boven in het midden: De naam van de tijd
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = entry.event.title,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
-                            color = if (isActiveNow || isNextUpcoming) AccentGoldBright else TextPrimary,
-                            textAlign = TextAlign.Center
-                        )
-
-                        if (isActiveNow) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = AccentSolar.copy(alpha = 0.22f),
-                                shape = RoundedCornerShape(50),
-                                border = androidx.compose.foundation.BorderStroke(0.8.dp, AccentSolar)
-                            ) {
-                                Text(
-                                    text = "ACTIEF",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.sp,
-                                    color = AccentSolar,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = entry.event.title,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        color = if (isNextUpcoming) AccentGoldBright else TextPrimary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // 2. Daaronder in het midden: Het tijdsvak
+                    // 2. Daaronder in het midden: Het tijdstip
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(BackgroundDark.copy(alpha = 0.45f))
                             .border(
                                 0.8.dp,
-                                if (isActiveNow || isNextUpcoming) AccentSolar.copy(alpha = 0.35f)
-                                else AccentCyan.copy(alpha = 0.2f),
+                                if (isNextUpcoming) AccentSolar.copy(alpha = 0.45f)
+                                else AccentCyan.copy(alpha = 0.25f),
                                 RoundedCornerShape(10.dp)
                             )
-                            .padding(horizontal = 18.dp, vertical = 5.dp),
+                            .padding(horizontal = 24.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "${entry.startTime.format(formatter)}  –  ${entry.endTime.format(formatter)}",
-                            fontSize = intervalFontSize,
+                            text = entry.time.format(formatter),
+                            fontSize = timeFontSize,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isActiveNow) AccentSolar else TextPrimary,
+                            color = if (isNextUpcoming) AccentSolar else TextPrimary,
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )
@@ -462,12 +430,12 @@ fun ScheduleCardsSection(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // 3. Daaronder in het midden: De zonstanden
+                    // 3. Daaronder in het midden: De zonnestand
                     Text(
                         text = entry.event.astronomicalAnchor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isActiveNow || isNextUpcoming) TextCyan else TextSecondary,
+                        color = if (isNextUpcoming) TextCyan else TextSecondary,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

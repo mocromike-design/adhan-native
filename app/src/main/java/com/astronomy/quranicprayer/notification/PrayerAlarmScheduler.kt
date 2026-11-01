@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import com.astronomy.quranicprayer.data.model.DailySchedule
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 class PrayerAlarmScheduler(private val context: Context) {
 
@@ -16,17 +17,16 @@ class PrayerAlarmScheduler(private val context: Context) {
         if (!canScheduleExactAlarms()) return
 
         val now = ZonedDateTime.now()
+        val formatter = DateTimeFormatter.ofPattern("HH:mm")
 
-        val formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-
-        // 1. Schedule exact alarms for each prayer event start (Fajr -6°, Duluk Zenith, Ghasaq -6°)
+        // 1. Schedule exact alarms for each prayer time (Salaat al-Fajr -6°, Salaat al-Wusta Zenith, Salaat al-Isha 0°)
         schedule.entries.forEachIndexed { index, entry ->
-            if (entry.startTime.isAfter(now)) {
-                val timeRangeStr = "${entry.startTime.format(formatter)} - ${entry.endTime.format(formatter)}"
+            if (entry.time.isAfter(now)) {
+                val timeStr = entry.time.format(formatter)
                 val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
                     action = PrayerAlarmReceiver.ACTION_TRIGGER_PRAYER
                     putExtra(PrayerAlarmReceiver.EXTRA_PRAYER_NAME, entry.event.title)
-                    putExtra(PrayerAlarmReceiver.EXTRA_ASTRONOMICAL_INFO, "$timeRangeStr (${entry.event.astronomicalAnchor})")
+                    putExtra(PrayerAlarmReceiver.EXTRA_ASTRONOMICAL_INFO, "$timeStr (${entry.event.astronomicalAnchor})")
                 }
 
                 val pendingIntent = PendingIntent.getBroadcast(
@@ -36,8 +36,8 @@ class PrayerAlarmScheduler(private val context: Context) {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                val triggerMillis = entry.startTime.toInstant().toEpochMilli()
-                
+                val triggerMillis = entry.time.toInstant().toEpochMilli()
+
                 // setExactAndAllowWhileIdle ensures it fires even in Android Deep Doze mode
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,

@@ -32,7 +32,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         const val ACTION_MIDNIGHT_RESCHEDULE = "com.astronomy.quranicprayer.ACTION_MIDNIGHT_RESCHEDULE"
         const val EXTRA_PRAYER_NAME = "extra_prayer_name"
         const val EXTRA_ASTRONOMICAL_INFO = "extra_astronomical_info"
-        private const val CHANNEL_ID = "celestial_adhan_channel_v2"
+        private const val CHANNEL_ID = "salat_times_adhan_channel_v2"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -46,8 +46,8 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         try {
             when (intent.action) {
                 ACTION_TRIGGER_PRAYER -> {
-                    val prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME) ?: "Celestial Transition"
-                    val astroInfo = intent.getStringExtra(EXTRA_ASTRONOMICAL_INFO) ?: "Solar Alignment"
+                    val prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME) ?: "Salat Times"
+                    val astroInfo = intent.getStringExtra(EXTRA_ASTRONOMICAL_INFO) ?: ""
                     
                     showNotificationWithVibrationAndAudio(context, prayerName, astroInfo)
                 }
@@ -58,28 +58,19 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                         val today = LocalDate.now()
                         val zone = ZoneId.systemDefault()
 
-                        // 1. Fajr: -6.0° morning to sunrise (-0.833°)
-                        val fajrStart = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -6.0, true, zone)
-                        val fajrEnd = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -0.833, true, zone)
+                        // 1. Salaat al-Fajr: -6.0° oost (morning)
+                        val fajr = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -6.0, true, zone)
 
-                        // 2. Duluk: Zenith (Solar Noon) to sunset (-0.833°)
-                        val dulukStart = SolarCalculator.calculateSolarNoon(today, lat, lon, zone)
-                        val dulukEnd = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -0.833, false, zone)
+                        // 2. Salaat al-Wusta: Zenith (Solar Noon)
+                        val wusta = SolarCalculator.calculateSolarNoon(today, lat, lon, zone)
 
-                        // 3. Ghasaq: -6.0° evening to -12.0° evening
-                        val ghasaqStart = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -6.0, false, zone)
-                        val ghasaqEnd = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, -12.0, false, zone)
+                        // 3. Salaat al-Isha: 0.0° west (evening)
+                        val isha = SolarCalculator.calculateTimeAtAltitude(today, lat, lon, 0.0, false, zone)
 
                         val entries = mutableListOf<EventEntry>()
-                        if (fajrStart != null && fajrEnd != null) {
-                            entries.add(EventEntry(PrayerEvent.FAJR, fajrStart, fajrEnd))
-                        }
-                        if (dulukEnd != null) {
-                            entries.add(EventEntry(PrayerEvent.DULUK, dulukStart, dulukEnd))
-                        }
-                        if (ghasaqStart != null && ghasaqEnd != null) {
-                            entries.add(EventEntry(PrayerEvent.GHASAQ, ghasaqStart, ghasaqEnd))
-                        }
+                        fajr?.let { entries.add(EventEntry(PrayerEvent.FAJR, it)) }
+                        entries.add(EventEntry(PrayerEvent.WUSTA, wusta))
+                        isha?.let { entries.add(EventEntry(PrayerEvent.ISHA, it)) }
 
                         val schedule = DailySchedule(today, entries, "Auto Rescheduled", lat, lon)
                         PrayerAlarmScheduler(context).scheduleAlarms(schedule)
@@ -109,10 +100,10 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Adhan Prayer Notifications",
+                "Salat Times Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Nidā' Astronomical Prayer Alarms with Sound & Vibration"
+                description = "Salat Times Astronomical Alarms with Sound & Vibration"
                 enableVibration(true)
                 setVibrationPattern(vibrationPattern)
                 setSound(adhanUri, audioAttributes)
